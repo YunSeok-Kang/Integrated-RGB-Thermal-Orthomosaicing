@@ -115,13 +115,22 @@ def MatrixExp(B,v,device):
     
     return H    
 
-def PerspectiveWarping(I, H, xv, yv):
+def PerspectiveWarping(I, H, xv, yv, debug=False):
     '''
     FUnction to apply transformation in the homogeneous coordinates (batch-wise)
     '''
     xvt = (xv*H[0,0]+yv*H[0,1]+H[0,2])/(xv*H[2,0]+yv*H[2,1]+H[2,2])
     yvt = (xv*H[1,0]+yv*H[1,1]+H[1,2])/(xv*H[2,0]+yv*H[2,1]+H[2,2])
+    if debug:
+        print(I.shape)
+        print(torch.stack([xvt,yvt],2))
+        print(torch.stack([xvt,yvt],2).unsqueeze(0))
+        print(torch.stack([xvt,yvt],2).shape)
+        print(torch.stack([xvt,yvt],2).unsqueeze(0).shape)
+
     J = F.grid_sample(I,torch.stack([xvt,yvt],2).unsqueeze(0),align_corners=False).squeeze()
+    # print(J)
+    # print(J.shape)
     return J
 
 def multi_resolution_loss(I_lst, J_lst, xy_lst, homography_net, L, two_way_loss, ngf_flag=True):
@@ -130,6 +139,8 @@ def multi_resolution_loss(I_lst, J_lst, xy_lst, homography_net, L, two_way_loss,
     '''
     loss = 0.0
     for s in np.arange(L-1,-1,-1):
+        # print(J_lst[s].unsqueeze(0).shape)
+        # print(homography_net().shape)
         Jw_ = PerspectiveWarping(J_lst[s].unsqueeze(0), homography_net(), xy_lst[s][:,:,0], xy_lst[s][:,:,1]).squeeze()
         if len(Jw_.shape) == 2: Jw_ = Jw_.unsqueeze(0)
         ng = NGF(I_lst[s],Jw_) if ngf_flag else ECC(I_lst[s],Jw_)
@@ -233,6 +244,7 @@ def hist_match1(source, template):
 def map_all_images_using_NGF(I_dir, J_dir, save_dir, thermal_texture_dir, date, params={}, thermal_ext='tiff', dof='affine', eval=False):
     torch.cuda.empty_cache()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print(device)
 
     # extract required params
     batch_size = params.get('BATCH_SIZE', 64) 
@@ -249,10 +261,15 @@ def map_all_images_using_NGF(I_dir, J_dir, save_dir, thermal_texture_dir, date, 
     two_way_loss = params.get('TWO_WAY_LOSS', True)
     ngf_flag = params.get('NGF_FLAG', True)
 
- 
+    for fname in os.listdir(I_dir):
+        print(fname)
+
+    for fname in os.listdir(J_dir):
+        print(fname)
+
     # load image names
     I_files = [f"{I_dir}/{fname}" for fname in os.listdir(I_dir) if fname.endswith(".tif")]
-    J_files = [f"{J_dir}/{fname.split('.')[0]}.{thermal_ext}" for fname in os.listdir(I_dir) if fname.endswith(".tif")]
+    J_files = [f"{J_dir}/{fname.split('.')[0]}.{thermal_ext}" for fname in os.listdir(J_dir) if fname.endswith(".JPG")]
     assert len(I_files) == len(J_files)
 
     # splice first batchsize amount
@@ -282,9 +299,24 @@ def map_all_images_using_NGF(I_dir, J_dir, save_dir, thermal_texture_dir, date, 
 
     else: # min-max normalization
         I_imgs = np.array([rgb2gray(io.imread(fname)).astype(np.float32) for fname in tqdm(I_files)])
-        J_imgs = np.array([io.imread(fname).astype(np.float32) for fname in tqdm(J_files)]) 
-        
+        J_imgs = np.array([io.imread(fname, as_gray=True).astype(np.float32) for fname in tqdm(J_files)]) # (n, h, w, 3) -> (n, h, w)
+        # print(np.squeeze(J_imgs[0]))
+        # print(np.squeeze(J_imgs[0]).shape)
+
+        # print(np.transpose(J_imgs[0], axes=(2, 0, 1)))
+        # print(np.transpose(J_imgs[0], axes=(2, 0, 1)).shape)
+
+        print('--- I_imgs---')
+        print(I_imgs.shape)
+        print((I_imgs[:] - np.amin(I_imgs, axis=(1,2)).reshape(-1,1,1)).shape)
+        print((np.amax(I_imgs, axis=(1,2)) - np.amin(I_imgs, axis=(1,2))).reshape(-1,1,1).shape)
+
         I_imgs[:] = (I_imgs[:] - np.amin(I_imgs, axis=(1,2)).reshape(-1,1,1)) / (np.amax(I_imgs, axis=(1,2)) - np.amin(I_imgs, axis=(1,2))).reshape(-1,1,1)
+
+        print('--- J_imgs---')
+        print(J_imgs.shape)
+        print((J_imgs[:] - np.amin(J_imgs, axis=(1,2)).reshape(-1,1,1)).shape)
+        print((np.amax(J_imgs, axis=(1,2)) - np.amin(J_imgs, axis=(1,2))).reshape(-1,1,1).shape)
         J_imgs[:] = (J_imgs[:] - np.amin(J_imgs, axis=(1,2)).reshape(-1,1,1)) / (np.amax(J_imgs, axis=(1,2)) - np.amin(J_imgs, axis=(1,2))).reshape(-1,1,1)
 
 
@@ -317,8 +349,8 @@ def map_all_images_using_NGF(I_dir, J_dir, save_dir, thermal_texture_dir, date, 
     print("Creating image pyramid for each image...")
     pyramid_I_list, pyramid_J_list = None, None
     for k in tqdm(range(batch_size)):
-        pyramid_I_temp = list(pyramid_gaussian(I_imgs[k], downscale=downscale, multichannel=False))
-        pyramid_J_temp = list(pyramid_gaussian(J_imgs[k], downscale=downscale, multichannel=False))
+        pyramid_I_temp = list(pyramid_gaussian(I_imgs[k], downscale=downscale))#, multichannel=False))
+        pyramid_J_temp = list(pyramid_gaussian(J_imgs[k], downscale=downscale))#, multichannel=False))
         pyramid_I_temp = [np.expand_dims(pyramid_I_temp[s], axis=0) for s in range(len(pyramid_I_temp))]
         pyramid_J_temp = [np.expand_dims(pyramid_J_temp[s], axis=0) for s in range(len(pyramid_J_temp))]
 
@@ -367,14 +399,15 @@ def map_all_images_using_NGF(I_dir, J_dir, save_dir, thermal_texture_dir, date, 
     plt.title("Training loss for NGF")
 
     # save homography net
-    torch.save(homography_net.state_dict(), f'{date}/ngf_homography_net.pth')
+    # torch.save(homography_net.state_dict(), f'{date}/ngf_homography_net.pth')
+    torch.save(homography_net.state_dict(), 'E:/test1/ngf_homography_net.pth')
     homography_net = HomographyNet(device, dof).to(device)
 
     from PIL import Image
     with torch.no_grad():
         # get all images to warp (batch)
         print("Reading all original thermal images to warp...")
-        J_imgs = np.array([cv2.imread(f"{thermal_texture_dir}/{fname}", cv2.IMREAD_UNCHANGED) for fname in tqdm(os.listdir(thermal_texture_dir))])
+        J_imgs = np.array([cv2.imread(f"{thermal_texture_dir}/{fname}", cv2.IMREAD_GRAYSCALE) for fname in tqdm(os.listdir(thermal_texture_dir))])
         dtype = J_imgs.dtype
         J_imgs = J_imgs.astype(np.float32)
         dtype2 = J_imgs.dtype
@@ -386,7 +419,7 @@ def map_all_images_using_NGF(I_dir, J_dir, save_dir, thermal_texture_dir, date, 
         save_file_names = os.listdir(thermal_texture_dir)
 
 
-        batch_size = 64
+        # batch_size = 64
         if batch_size % len(save_file_names) == 1:
             batch_size += 1
         print("Saving warped images...")
@@ -397,11 +430,16 @@ def map_all_images_using_NGF(I_dir, J_dir, save_dir, thermal_texture_dir, date, 
                 J_t = torch.tensor(J_imgs[i:]).to(device)
 
             # get homography matrix and warp entire batch
-            homography_net = HomographyNet(device, dof).to(device)
-            homography_net.load_state_dict(torch.load(f"2022_08_30/ngf_homography_net.pth")) # TODO: change to {date/}
-            homography_net.load_state_dict(torch.load(f"{date}/ngf_homography_net.pth")) # TODO: change to {date/}
+            homography_net = HomographyNet(device, dof).to(device) # 하드코딩 수정해야
+            homography_net.load_state_dict(torch.load(f"E:/test1/ngf_homography_net.pth")) # TODO: change to {date/}
+            # homography_net.load_state_dict(torch.load(f"{date}/ngf_homography_net.pth")) # TODO: change to {date/}
             H = homography_net()
-            J_w = PerspectiveWarping(J_t.unsqueeze(0), H , xy_lst[0][:,:,0], xy_lst[0][:,:,1]).squeeze()
+            # print('===')
+            # print(J_t.shape)
+            # print(J_t.unsqueeze(0).shape)
+            # print(H)
+            J_w = PerspectiveWarping(J_t.unsqueeze(0), H , xy_lst[0][:,:,0], xy_lst[0][:,:,1], True).squeeze()
+            print(J_w)
             if dtype != np.float32:
                 J_w = J_w.detach().cpu().numpy().astype(np.uint16)
             else:
@@ -426,6 +464,8 @@ def map_all_images_using_NGF(I_dir, J_dir, save_dir, thermal_texture_dir, date, 
         I_t = torch.tensor(I).to(device)
         J_t = torch.tensor(J).to(device)
 
+        # print(J_t.unsqueeze(0).unsqueeze(0).shape)
+        # print(H.shape)
         J_w = PerspectiveWarping(J_t.unsqueeze(0).unsqueeze(0), H , xy_lst[0][:,:,0], xy_lst[0][:,:,1]).squeeze()
 
         D = J_t - I_t
@@ -463,15 +503,26 @@ def map_all_images_using_NGF(I_dir, J_dir, save_dir, thermal_texture_dir, date, 
 
 def run():
 
-    exp_name = 'images_trial'
-    for project in ['2022_07_20', '2022_07_26', '2022_08_09', '2022_08_17', '2022_08_30']:
-        undist_rgb_dir = f"{project}/combined/opensfm/undistorted/images_rgb"
-        thermal_final_dir = f"{project}/thermal/images_resized"
-        thermal_texture_dir = f"{project}/thermal/images_resized"
-        save_dir = f"{project}/combined/opensfm/undistorted/{exp_name}"
-        params = {'NGF_FLAG':True}
-        dof = 'affine'
-        map_all_images_using_NGF(undist_rgb_dir, thermal_final_dir, save_dir, thermal_texture_dir, project, params=params, thermal_ext='tiff', dof=dof)
+    # exp_name = 'images_trial'
+    # for project in ['2022_07_20', '2022_07_26', '2022_08_09', '2022_08_17', '2022_08_30']:
+    #     undist_rgb_dir = f"{project}/combined/opensfm/undistorted/images_rgb"
+    #     thermal_final_dir = f"{project}/thermal/images_resized"
+    #     thermal_texture_dir = f"{project}/thermal/images_resized"
+    #     save_dir = f"{project}/combined/opensfm/undistorted/{exp_name}"
+    #     params = {'NGF_FLAG':True}
+    #     dof = 'affine'
+    #     map_all_images_using_NGF(undist_rgb_dir, thermal_final_dir, save_dir, thermal_texture_dir, project, params=params, thermal_ext='tiff', dof=dof)
+    # return
+
+    # test 1
+    project = 'E:/test1'
+    undist_rgb_dir = f"{project}/combined/opensfm/undistorted/images_rgb"
+    thermal_final_dir = f"{project}/thermal/images_resized"
+    thermal_texture_dir = f"{project}/thermal/images_resized"
+    save_dir = f"{project}/combined/opensfm/undistorted/images"
+    params = {'NGF_FLAG':True, 'BATCH_SIZE':21}
+    dof = 'affine'
+    map_all_images_using_NGF(undist_rgb_dir, thermal_final_dir, save_dir, thermal_texture_dir, project, params=params, thermal_ext='JPG', dof=dof)
     return
 
     #  single res

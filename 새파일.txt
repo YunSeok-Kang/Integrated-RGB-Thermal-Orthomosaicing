@@ -1,0 +1,1 @@
+.\run.bat --build-overviews  --ignore-gsd  --matcher-neighbors 4 --orthophoto-resolution 10.0 --time  --use-exif  --rerun-from mvs_texturing   E:/test1/combined

@@ -9,7 +9,7 @@ import webbrowser
 
 from PyQt5.QtGui import QIntValidator, QDoubleValidator
 
-
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 
 class Stream(QtCore.QObject):

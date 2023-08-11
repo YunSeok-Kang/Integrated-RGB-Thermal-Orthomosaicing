@@ -1,9 +1,9 @@
 CAMERA: H20T
 DIR:
   H20T_DATA: auto
-  PROJECT: 2022_08_30_test
-  RGB: ''
-  THERMAL: ''
+  PROJECT: E:/test1
+  RGB: E:/test1/mapping_data/rgb
+  THERMAL: E:/test1/mapping_data/thermal
 HOMOGRAPHY:
   DOF: affine
   MANUAL_PARAMS:
@@ -11,7 +11,7 @@ HOMOGRAPHY:
     IMAGE_PAIR_INDEX: 0
   MODE: NGF
   NGF_PARAMS:
-    BATCH_SIZE: 64
+    BATCH_SIZE: 21
     DOWNSCALE: 1.5
     HIST_EQ: false
     LEARNING_RATE: 0.005
@@ -35,7 +35,7 @@ OUTPUT:
 PREPROCESSING:
   RGB:
     CROP: true
-    SCALE: 5.0
+    SCALE: 4.5
   THERMAL:
     H20T:
       DISTANCE: 25.0
@@ -47,7 +47,7 @@ PREPROCESSING:
 STAGES:
   COMBINED_STAGES:
     STAGE_1: false
-    STAGE_2: false
+    STAGE_2: true
     STAGE_3: false
     STAGE_4: false
   METHOD: combined
@@ -58,7 +58,7 @@ STAGES:
     N_TOP: 9
     PATCH_OVERLAP: 0.5
     PATCH_SIZE: 500
-    PERFORM: true
-    SAVE_BBOX_IMAGE: true
-    SAVE_TREE_CROWNS: true
+    PERFORM: false
+    SAVE_BBOX_IMAGE: false
+    SAVE_TREE_CROWNS: false
     SCORE_THRESH: 0.5

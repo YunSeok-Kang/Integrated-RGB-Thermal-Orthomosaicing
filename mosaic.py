@@ -259,6 +259,7 @@ def convert_rjpeg_to_raw(exec_path, rjpeg_dir, thermal_dir, log_file, function="
         call =  f"{exec_path} -s {rjpeg_dir} -a measure -o {thermal_dir}/img --measurefmt float32 {options} > {log_file}"
     else:
         call = f"{exec_path} -s {rjpeg_dir} -a {function} -o {thermal_dir}/img {options} > {log_file}"
+    print(call)
     os.system(call)
 
     # create save dir
@@ -668,7 +669,8 @@ def combined_mapping_pipeline(cfg):
         # run ODM on RGB data
         os.chdir("ODM")
         flags = get_ODM_flags(cfg["ODM"])
-        second_part = f"{ROOT_DIR}/{project}/rgb" if ROOT_DIR not in project else f"{project}/rgb"
+        # second_part = f"{ROOT_DIR}/{project}/rgb" if ROOT_DIR not in project else f"{project}/rgb"
+        second_part = f"{project}/rgb"
         call_1 = f".\\run.bat {flags} {second_part}"
         os.system(call_1)
         os.chdir("..")
@@ -825,6 +827,13 @@ def combined_mapping_pipeline(cfg):
         print("\n\n------------ STAGE 4 ------------")
         mode = cfg["HOMOGRAPHY"]["MODE"]
 
+        # 사용 예시
+        directory = f'{project}/combined/opensfm/undistorted/images'  # 특정 디렉토리 경로
+        old_extension = '.JPG.tif'  # 변경하려는 확장자
+        new_extension = '.tiff'  # 변경될 확장자
+
+        rename_file_extension(directory, old_extension, new_extension)
+
         ## run ODM on thermal data from texturing step
         os.chdir("ODM")
         flags_dir = cfg["ODM"]
@@ -833,7 +842,8 @@ def combined_mapping_pipeline(cfg):
         if optimize_disk_space:
             flags_dir["optimize-disk-space"] = ''
         flags = get_ODM_flags(flags_dir)
-        second_part = f"{ROOT_DIR}/{project}/combined" if ROOT_DIR not in project else f"{project}/combined"
+        # second_part = f"{ROOT_DIR}/{project}/combined" if ROOT_DIR not in project else f"{project}/combined"
+        second_part = f"{project}/combined"
         call_2 = f".\\run.bat {flags} {second_part}"
         os.system(call_2)
         os.chdir("..")
@@ -844,6 +854,12 @@ def combined_mapping_pipeline(cfg):
         shutil.move(f'{project}/combined/odm_orthophoto/odm_orthophoto.tif', output_path) 
 
 
+def rename_file_extension(directory, old_extension, new_extension):
+    for filename in os.listdir(directory):
+        if filename.endswith(old_extension):
+            old_file = os.path.join(directory, filename)
+            new_file = os.path.join(directory, os.path.splitext(filename)[0] + new_extension)
+            os.rename(old_file, new_file)
 
 
 def thermal_mapping_pipeline(cfg):
