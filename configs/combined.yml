@@ -1,9 +1,9 @@
 CAMERA: H20T
 DIR:
   H20T_DATA: auto
-  PROJECT: E:/test1
-  RGB: E:/test1/mapping_data/rgb
-  THERMAL: E:/test1/mapping_data/thermal
+  PROJECT: E:/test_minsung
+  RGB: E:/test_minsung/mapping_data/rgb
+  THERMAL: E:/test_minsung/mapping_data/thermal
 HOMOGRAPHY:
   DOF: affine
   MANUAL_PARAMS:

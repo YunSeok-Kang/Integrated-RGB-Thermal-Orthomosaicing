@@ -250,8 +250,6 @@ def min_max_norm_images(img_dir, save_dir, log_file, resize=False, size=None):
         cv2.imwrite(f"{save_dir}/{img_names[idx]}", norm_img) 
 
         
-
-
 def convert_rjpeg_to_raw(exec_path, rjpeg_dir, thermal_dir, log_file, function="measure", humidity=70, emissivity=0.95, distance=25, reflection=25):
     # call SDK
     options = f'--emissivity {emissivity} --humidity {humidity} --distance {distance} --reflection {reflection} --verbose detail'
@@ -276,27 +274,31 @@ def convert_rjpeg_to_raw(exec_path, rjpeg_dir, thermal_dir, log_file, function="
     # check if all images worked
     before = len(os.listdir(rjpeg_dir))
     after = len(os.listdir(f"{thermal_dir}/raw"))
+    print(before)
+    print(after)
     assert before == after, "DJI SDK Issue! Not all images converted due to chosen settings. Change and retry."
 
 
 from PIL import Image
 def rasterize_raw_to_tiffs(raw_dir, tiff_dir, ROOT_DIR, function='extract', img_size = (512,640)):
+    # rasterize_raw_to_tiffs(f'{project}/thermal/raw', f'{project}/thermal/images', ROOT_DIR, function) 
+
     # load images in RGB format
     img_names = [f"{raw_dir}/{fname}" for fname in os.listdir(raw_dir)]
     sorted_indices = sort_tiff_names(img_names)
     img_names = [img_names[i] for i in sorted_indices]
-
     if not os.path.exists(tiff_dir):
         os.makedirs(tiff_dir)
-
+    
     for idx, raw_name in enumerate(tqdm(img_names)):
         img = np.fromfile(raw_name, dtype=np.float32)
         img = img.reshape(img_size[0],img_size[1])
     
         out_path = f'{tiff_dir}/img_{idx}.tiff'
-        if idx == 0:
-            io.imshow(img)
-        io.imsave(out_path, img)
+        # if idx == 0:
+        #     io.imshow(img)
+        cv2.imwrite(out_path, img) # checkpoint
+        # io.imsave(out_path, img)
     
     # R_EXE_PATH = f'{ROOT_DIR}/R/R-4.2.1/bin/Rscript.exe'
 
@@ -672,7 +674,15 @@ def combined_mapping_pipeline(cfg):
         # second_part = f"{ROOT_DIR}/{project}/rgb" if ROOT_DIR not in project else f"{project}/rgb"
         second_part = f"{project}/rgb"
         call_1 = f".\\run.bat {flags} {second_part}"
+        # sys.stdout = open('stdout.txt', 'w')
+
+        print(call_1)
+
+        # sys.stdout.close()
+
         os.system(call_1)
+    
+    
         os.chdir("..")
 
 
@@ -701,6 +711,8 @@ def combined_mapping_pipeline(cfg):
 
         if camera == "H20T":
             # Move RJPEGs to one directory
+            print('---'*10)
+            print(f'camera: {camera}')
             print("Moving RJPEGs to single directory...")
             if mapping_dir is not None:
                 if nested:
@@ -714,6 +726,7 @@ def combined_mapping_pipeline(cfg):
             
             # Convert RJPEGs to raw binary files / temp files
             print("Converting rjpegs to raw...")
+            print()
             function = cfg["PREPROCESSING"]["THERMAL"]["H20T"]["FUNCTION"]
             exec_path = None # cfg["PREPROCESSING"]["THERMAL"]["H20T"]["DJI_THERMAL_SDK_PATH"]
             if exec_path is None or (not os.path.exists(exec_path)):
@@ -723,20 +736,24 @@ def combined_mapping_pipeline(cfg):
             distance = cfg["PREPROCESSING"]["THERMAL"]["H20T"]["DISTANCE"]
             reflection = cfg["PREPROCESSING"]["THERMAL"]["H20T"]["TEMPERATURE"]
             emissivity = cfg["PREPROCESSING"]["THERMAL"]["H20T"]["EMISSIVITY"]
+            print('==='*10)
+            print(f'exec_path: {exec_path}')
             convert_rjpeg_to_raw(exec_path, f'{project}/thermal/rjpegs', f'{project}/thermal', f"{project}/logs/log_binary-extraction.txt", function=function, humidity=humidity, emissivity=emissivity, distance=distance, reflection=reflection)
-
+            print()
 
             ## rasterize binary data to TIFFs
             print("Converting raw to tiffs...")
+            print()
             rasterize_raw_to_tiffs(f'{project}/thermal/raw', f'{project}/thermal/images', ROOT_DIR, function) 
         
 
         # for other drones, just copy over data to project/thermal/images (assuming preprocessed)
         else:
             print("Moving images from provided thermal directory to thermal/images ...")
+            print()
             prepare_thermal_images(thermal_dir, f'{project}/thermal/images', ext="")
+        
     _, thermal_ext = determine_extensions(camera, rgb_dir, f'{project}/thermal/images')
-    
 
     ### STAGE 3 -- RGB THERMAL ALIGNMENT
     if cfg["STAGES"]['COMBINED_STAGES']['STAGE_3']:
@@ -828,11 +845,13 @@ def combined_mapping_pipeline(cfg):
         mode = cfg["HOMOGRAPHY"]["MODE"]
 
         # 사용 예시
-        directory = f'{project}/combined/opensfm/undistorted/images'  # 특정 디렉토리 경로
-        old_extension = '.JPG.tif'  # 변경하려는 확장자
-        new_extension = '.tiff'  # 변경될 확장자
+        # directory = f'{project}/combined/opensfm/undistorted/images'  # 특정 디렉토리 경로
+        # old_extension = '.JPG.tif'  # 변경하려는 확장자
+        # new_extension = '.tiff'  # 변경될 확장자
 
-        rename_file_extension(directory, old_extension, new_extension)
+        # rename_file_extension(directory, old_extension, new_extension)
+
+
 
         ## run ODM on thermal data from texturing step
         os.chdir("ODM")
@@ -845,7 +864,7 @@ def combined_mapping_pipeline(cfg):
         # second_part = f"{ROOT_DIR}/{project}/combined" if ROOT_DIR not in project else f"{project}/combined"
         second_part = f"{project}/combined"
         call_2 = f".\\run.bat {flags} {second_part}"
-        os.system(call_2)
+        assert os.system(call_2) == 0
         os.chdir("..")
 
 

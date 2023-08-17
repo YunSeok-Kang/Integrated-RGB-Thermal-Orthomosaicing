@@ -27,20 +27,20 @@ def dn_to_temperature(photo, image, dataset_tree):
     :param dataset_tree path to original source image to read data using PIL for DJI thermal photos
     :return numpy array with temperature (C) image values
     """
-
-   
-
     # Handle thermal bands
     if photo.is_thermal():
         # Every camera stores thermal information differently
         # The following will work for MicaSense Altum cameras
         # but not necessarily for others
+        # flag = 2
+
         if photo.camera_make == "MicaSense" and photo.camera_model == "Altum":
             image = image.astype("float32")
             image -= (273.15 * 100.0) # Convert Kelvin to Celsius
             image *= 0.01
             return image
         elif photo.camera_make == "DJI" and photo.camera_model == "ZH20T":            
+        # if flag == 2:
             filename, file_extension = os.path.splitext(photo.filename)
             # DJI H20T high gain mode supports measurement of -40~150 celsius degrees
             if file_extension.lower() in [".tif", ".tiff"] and image.min() >= 23315: # Calibrated grayscale tif
@@ -50,6 +50,7 @@ def dn_to_temperature(photo, image, dataset_tree):
                 return image
             else:
                 return image
+        # elif flag == 2:
         elif photo.camera_make == "DJI" and photo.camera_model == "MAVIC2-ENTERPRISE-ADVANCED":
             image = dji_unpack.extract_temperatures_dji(photo, image, dataset_tree)
             image = image.astype("float32")
